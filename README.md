@@ -33,4 +33,11 @@ Finally, I validated the model with my own sample inputs to confirm its effectiv
 * Matplotlib & Seaborn for visualizations
 * Open-source SMS spam dataset
 
-*OUTPUT*
+*OUTPUT*:
+
+
+
+![Image](https://github.com/user-attachments/assets/29b0bf54-ba63-4aeb-876d-487ea4fc7803)
+
+
+![Image](https://github.com/user-attachments/assets/82b643a2-754b-4f96-8333-acd2ef879a65)
