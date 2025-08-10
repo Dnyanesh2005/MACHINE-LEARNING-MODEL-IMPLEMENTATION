@@ -1,0 +1,106 @@
+# ---------- Install dependencies (run once in Colab) ----------
+!pip install -q scikit-learn pandas matplotlib seaborn joblib
+
+# ---------- Imports ----------
+import io
+from google.colab import files
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set(style="whitegrid")
+
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.pipeline import Pipeline
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import joblib
+
+# ---------- Upload CSV (or replace with a URL loading if you prefer) ----------
+print("Upload your CSV now (click Choose Files). The CSV should contain a text column and a label column.")
+uploaded = files.upload()
+if not uploaded:
+    raise SystemError("No file uploaded. Upload a CSV file containing the messages and labels.")
+fname = list(uploaded.keys())[0]
+print("Loaded:", fname)
+df = pd.read_csv(io.BytesIO(uploaded[fname]))
+print("Columns found:", df.columns.tolist())
+display(df.head())
+
+# ---------- Auto-detect text & label columns ----------
+text_candidates = [c for c in df.columns if c.lower() in ('text','message','body','content','email','msg','sms')]
+label_candidates = [c for c in df.columns if c.lower() in ('label','spam','class','target','type')]
+
+if not text_candidates:
+    # fallback: choose the first object/string column
+    text_candidates = [c for c in df.columns if df[c].dtype == object]
+if not text_candidates:
+    raise ValueError("No text-like column found. Rename your message column to 'text' or 'message'. Columns: " + ", ".join(df.columns))
+
+text_col = text_candidates[0]
+label_col = label_candidates[0] if label_candidates else [c for c in df.columns if c != text_col][0]
+
+print(f"Using text column -> '{text_col}' and label column -> '{label_col}'")
+
+# ---------- Clean & map labels to binary 0/1 ----------
+df = df[[text_col, label_col]].dropna().reset_index(drop=True)
+
+def to_binary_label(x):
+    s = str(x).strip().lower()
+    if s in ('spam','1','true','yes','s','y'):
+        return 1
+    if s in ('ham','not spam','0','false','no','n','not_spam'):
+        return 0
+    # try numeric
+    try:
+        val = float(s)
+        return 1 if val != 0 else 0
+    except:
+        # fallback: check substring
+        return 1 if 'spam' in s else 0
+
+df['label'] = df[label_col].apply(to_binary_label)
+print("Label distribution:\n", df['label'].value_counts())
+
+# ---------- Train / Test split ----------
+X = df[text_col].astype(str)
+y = df['label']
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.20, random_state=42, stratify=y if y.nunique()>1 else None
+)
+
+# ---------- Build pipeline & train ----------
+pipeline = Pipeline([
+    ('tfidf', TfidfVectorizer(stop_words='english', max_df=0.95, min_df=1, ngram_range=(1,2))),
+    ('clf', MultinomialNB())
+])
+
+pipeline.fit(X_train, y_train)
+
+# ---------- Evaluate ----------
+y_pred = pipeline.predict(X_test)
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("\nClassification Report:\n", classification_report(y_test, y_pred, target_names=['Not Spam','Spam']))
+
+cm = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(5,4))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Not Spam','Spam'], yticklabels=['Not Spam','Spam'])
+plt.xlabel('Predicted'); plt.ylabel('Actual'); plt.title('Confusion Matrix')
+plt.show()
+
+# ---------- Test with custom messages ----------
+print("\nTest custom messages:")
+custom_messages = [
+    "Win a free iPhone now!!! Click here to claim your prize",
+    "Reminder: project meeting tomorrow at 10am. Please confirm."
+]
+preds = pipeline.predict(custom_messages)
+for msg, p in zip(custom_messages, preds):
+    print(f"[{'SPAM' if p==1 else 'NOT SPAM'}] {msg}")
+
+# ---------- Save the trained model (optional) ----------
+model_filename = "spam_classifier.joblib"
+joblib.dump(pipeline, model_filename)
+print(f"Model saved to {model_filename}. You can download it if needed.")
+files.download(model_filename)  is this MACHINE LEARNING
